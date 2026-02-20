@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Red Packet - Falling Money & Photo Focus</title>
+    <title>3D Red Packet - Falling Money & Glowing Stars</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=WDXL+Lubrifont+SC&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=WDXL+Lubrifont+SC&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
     
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
@@ -14,9 +14,10 @@
         canvas:active { cursor: grabbing; }
         #ui-hint {
             position: absolute; bottom: 20px; width: 100%; text-align: center;
-            color: white; font-family: 'WDXL Lubrifont SC', sans-serif;
-            pointer-events: none; text-shadow: 0 0 10px red; font-size: 1.2rem;
+            color: white; font-family: 'ZCOOL QingKe HuangYou', sans-serif;
+            pointer-events: none; text-shadow: 0 0 10px rgba(255,255,255,0.8); font-size: 1.2rem;
             z-index: 10;
+            letter-spacing: 2px;
         }
     </style>
 </head>
@@ -55,11 +56,29 @@
         bgTex.colorSpace = THREE.SRGBColorSpace;
         scene.background = bgTex;
 
+        // --- Glowing Stars Background ---
+        const starCount = 1000;
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i++) {
+            starPositions[i] = (Math.random() - 0.5) * 20;
+        }
+        starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+        const starField = new THREE.Points(starGeometry, starMaterial);
+        starField.position.z = -2;
+        scene.add(starField);
+
         const packetGroup = new THREE.Group();
         const height = 3.0; 
         const width = height * (16/9);
 
-        // --- Packet Sides ---
         const createSide = (url, isBack = false) => {
             const tex = loader.load(url);
             tex.colorSpace = THREE.SRGBColorSpace;
@@ -72,7 +91,6 @@
         const backSide = createSide('https://image2url.com/r2/default/images/1771538590326-4112549e-d3bb-4920-adb4-2c17d9478b53.png', true);
         backSide.position.z = -0.01;
 
-        // --- Target PNG Photo ---
         const sideImgTex = loader.load('https://image2url.com/r2/default/images/1771543295400-4804656f-6037-4a61-b70b-b3a999b25e8c.jpg');
         sideImgTex.colorSpace = THREE.SRGBColorSpace;
         const sideImgMat = new THREE.MeshBasicMaterial({ map: sideImgTex, transparent: true, opacity: 0 });
@@ -82,13 +100,14 @@
         sideImgMesh.name = "targetPhoto"; 
         sideImgMesh.renderOrder = 2;
 
-        // --- Canvas Text ---
         function createTextTexture(text) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 1024; canvas.height = 256;
-            ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 35;
-            ctx.fillStyle = '#ffffff'; ctx.font = 'bold 80px "WDXL Lubrifont SC"';
+            ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 20;
+            ctx.fillStyle = '#ffffff'; 
+            // Using the new ZCOOL QingKe HuangYou font
+            ctx.font = 'bold 90px "ZCOOL QingKe HuangYou"';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(text, canvas.width / 2, canvas.height / 2);
             const texture = new THREE.CanvasTexture(canvas);
@@ -103,7 +122,6 @@
         packetGroup.add(frontSide, backSide, textMesh, sideImgMesh);
         scene.add(packetGroup);
 
-        // --- Falling Money Logic ---
         const fallingBills = [];
         let hasFlipped = false;
         function spawnMoney() {
@@ -119,50 +137,28 @@
             }
         }
 
-        // --- Zooming Logic (UPDATED) ---
         let isZoomed = false;
         let sideImageVisible = false;
 
         const zoomIn = () => {
             isZoomed = true;
-            // Set renderOrder very high to be in front of everything
             sideImgMesh.renderOrder = 9999; 
-            sideImgMat.depthTest = false; // Ensures it ignores depth of other objects
-            
-            gsap.to(sideImgMesh.position, { 
-                x: 0, 
-                y: 0, 
-                z: 5.5, // Brought much closer to camera
-                duration: 1.0, 
-                ease: "expo.out" 
-            });
-            gsap.to(sideImgMesh.scale, { 
-                x: 3.5, // Enlarged scale
-                y: 3.5, 
-                duration: 1.0,
-                ease: "expo.out"
-            });
+            sideImgMat.depthTest = false;
+            gsap.to(sideImgMesh.position, { x: 0, y: 0, z: 5.5, duration: 1.0, ease: "expo.out" });
+            gsap.to(sideImgMesh.scale, { x: 3.5, y: 3.5, duration: 1.0, ease: "expo.out" });
             gsap.to(packetGroup.position, { z: -5, duration: 1.0 }); 
         };
 
         const zoomOut = () => {
             isZoomed = false;
             gsap.to(sideImgMesh.position, { 
-                x: width * 0.95, 
-                y: 0, 
-                z: -0.2, 
-                duration: 0.8, 
-                ease: "power2.inOut", 
-                onComplete: () => {
-                    sideImgMesh.renderOrder = 2; // Reset order
-                    sideImgMat.depthTest = true; // Re-enable depth testing
-                }
+                x: width * 0.95, y: 0, z: -0.2, duration: 0.8, ease: "power2.inOut", 
+                onComplete: () => { sideImgMesh.renderOrder = 2; sideImgMat.depthTest = true; }
             });
             gsap.to(sideImgMesh.scale, { x: 1, y: 1, duration: 0.8 });
             gsap.to(packetGroup.position, { z: 0, duration: 0.8 });
         };
 
-        // --- Interaction ---
         let isDragging = false, prevX = 0;
 
         window.addEventListener('mousedown', (e) => { isDragging = false; prevX = e.clientX; });
@@ -171,16 +167,13 @@
                 isDragging = true;
                 if(!isZoomed) packetGroup.rotation.y += (e.clientX - prevX) * 0.01;
                 prevX = e.clientX;
-                
                 const rot = Math.abs(packetGroup.rotation.y % (Math.PI * 2));
                 const isShowingBack = rot > Math.PI * 0.5 && rot < Math.PI * 1.5;
-                
                 if (isShowingBack !== sideImageVisible && !isZoomed) {
                     sideImageVisible = isShowingBack;
                     gsap.to(sideImgMat, { opacity: isShowingBack ? 1 : 0, duration: 0.5 });
                     gsap.to(sideImgMesh.position, { x: isShowingBack ? width * 0.95 : width * 0.7, duration: 0.8 });
                 }
-
                 if (isShowingBack && !hasFlipped) {
                     spawnMoney();
                     hasFlipped = true;
@@ -192,7 +185,6 @@
         window.addEventListener('click', (e) => {
             if (isDragging) return;
             if (isZoomed) { zoomOut(); return; }
-
             mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
@@ -202,8 +194,14 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            if(!isZoomed) textMesh.position.y = Math.sin(Date.now() * 0.002) * 0.08;
+            const time = Date.now() * 0.001;
+
+            if(!isZoomed) textMesh.position.y = Math.sin(time * 2) * 0.08;
             
+            // Twinkle stars
+            starMaterial.opacity = 0.5 + Math.sin(time * 3) * 0.3;
+            starField.rotation.y += 0.0005;
+
             for (let i = fallingBills.length - 1; i >= 0; i--) {
                 const b = fallingBills[i];
                 b.mesh.position.y -= b.speed;
@@ -214,7 +212,6 @@
                     fallingBills.splice(i, 1);
                 }
             }
-            
             renderer.render(scene, camera);
         }
 
