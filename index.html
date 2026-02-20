@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Red Packet - Mobile Optimized</title>
+    <title>3D Red Packet - Music & Responsive</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=WDXL+Lubrifont+SC&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
@@ -28,7 +28,7 @@
     </style>
 </head>
 <body>
-    <div id="ui-hint">Swipe to rotate • Tap photo to zoom</div>
+    <div id="ui-hint">Tap to Start • Swipe to rotate</div>
 
     <script type="importmap">
         {
@@ -54,6 +54,27 @@
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         document.body.appendChild(renderer.domElement);
 
+        // --- AUDIO SETUP ---
+        const listener = new THREE.AudioListener();
+        camera.add(listener);
+        const backgroundMusic = new THREE.Audio(listener);
+        const audioLoader = new THREE.AudioLoader();
+        
+        let musicStarted = false;
+        audioLoader.load('https://image2url.com/r2/default/audio/1771552153075-29792ba3-1543-4ad7-9612-37da84f1d2ee.mp3', (buffer) => {
+            backgroundMusic.setBuffer(buffer);
+            backgroundMusic.setLoop(true);
+            backgroundMusic.setVolume(0.5);
+        });
+
+        const startMusic = () => {
+            if (!musicStarted && backgroundMusic.buffer) {
+                backgroundMusic.play();
+                musicStarted = true;
+                document.getElementById('ui-hint').innerText = "Swipe to rotate • Tap photo to zoom";
+            }
+        };
+
         const loader = new THREE.TextureLoader();
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
@@ -71,11 +92,7 @@
         }
         starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
         const starMaterial = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 0.06,
-            transparent: true,
-            opacity: 0.8,
-            blending: THREE.AdditiveBlending
+            color: 0xffffff, size: 0.06, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending
         });
         const starField = new THREE.Points(starGeometry, starMaterial);
         starField.position.z = -2;
@@ -101,20 +118,18 @@
         sideImgTex.colorSpace = THREE.SRGBColorSpace;
         const sideImgMat = new THREE.MeshBasicMaterial({ map: sideImgTex, transparent: true, opacity: 0 });
         const sideImgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), sideImgMat); 
-        
-        // --- UPDATED LOCATION: POSITIONED BELOW ---
         sideImgMesh.position.set(0, -height * 0.8, -0.2); 
         sideImgMesh.rotation.y = Math.PI; 
         sideImgMesh.name = "targetPhoto"; 
         sideImgMesh.renderOrder = 2;
 
-        function createTextTexture(text) {
+        function createTextTexture(text, fontSize = 90, shadowBlur = 30) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 1024; canvas.height = 256;
-            ctx.shadowColor = '#FF1493'; ctx.shadowBlur = 30;
+            ctx.shadowColor = '#FF1493'; ctx.shadowBlur = shadowBlur;
             ctx.fillStyle = '#ffffff'; 
-            ctx.font = 'bold 90px "ZCOOL QingKe HuangYou"';
+            ctx.font = `bold ${fontSize}px "ZCOOL QingKe HuangYou"`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(text, canvas.width / 2, canvas.height / 2);
             const texture = new THREE.CanvasTexture(canvas);
@@ -126,7 +141,15 @@
         textMesh.position.set(0, 0, -0.15); 
         textMesh.rotation.y = Math.PI;
 
-        packetGroup.add(frontSide, backSide, textMesh, sideImgMesh);
+        const englishText = "Galloping horses, with fortune shining high below";
+        const englishTextMesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(width * 0.8, 0.4),
+            new THREE.MeshBasicMaterial({ map: createTextTexture(englishText, 45, 15), transparent: true })
+        );
+        englishTextMesh.position.set(0, -0.5, -0.16); 
+        englishTextMesh.rotation.y = Math.PI;
+
+        packetGroup.add(frontSide, backSide, textMesh, englishTextMesh, sideImgMesh);
         scene.add(packetGroup);
 
         const fallingBills = [];
@@ -139,7 +162,6 @@
                     new THREE.MeshBasicMaterial({ map: moneyTex, transparent: true, side: THREE.DoubleSide })
                 );
                 bill.position.set((Math.random() - 0.5) * 8, 6, Math.random() * 2);
-                bill.renderOrder = 1;
                 scene.add(bill);
                 fallingBills.push({ mesh: bill, speed: 0.04 + Math.random() * 0.05, rot: (Math.random() - 0.5) * 0.1 });
             }
@@ -161,7 +183,6 @@
         const zoomOut = () => {
             isZoomed = false;
             gsap.to(sideImgMesh.position, { 
-                // --- UPDATED LOCATION: RETURN TO BELOW POSITION ---
                 x: 0, y: -height * 0.8, z: -0.2, duration: 0.8, ease: "power2.inOut", 
                 onComplete: () => { sideImgMesh.renderOrder = 2; sideImgMat.depthTest = true; }
             });
@@ -172,6 +193,7 @@
         let isDragging = false, prevX = 0;
 
         const startInteraction = (clientX) => {
+            startMusic(); // Play music on first interaction
             isDragging = false;
             prevX = clientX;
         };
@@ -186,8 +208,6 @@
                 if (isShowingBack !== sideImageVisible && !isZoomed) {
                     sideImageVisible = isShowingBack;
                     gsap.to(sideImgMat, { opacity: isShowingBack ? 1 : 0, duration: 0.5 });
-                    
-                    // --- UPDATED INTERACTION: FADE IN BELOW RATHER THAN TO THE RIGHT ---
                     gsap.to(sideImgMesh.position, { y: isShowingBack ? -height * 0.85 : -height * 0.6, duration: 0.8 });
                 }
                 if (isShowingBack && !hasFlipped) {
@@ -199,6 +219,7 @@
         };
 
         const handleSelect = (clientX, clientY) => {
+            startMusic();
             if (isDragging) return;
             if (isZoomed) { zoomOut(); return; }
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
@@ -221,7 +242,10 @@
         function animate() {
             requestAnimationFrame(animate);
             const time = Date.now() * 0.001;
-            if(!isZoomed) textMesh.position.y = Math.sin(time * 2) * 0.08;
+            if(!isZoomed) {
+                textMesh.position.y = Math.sin(time * 2) * 0.08;
+                englishTextMesh.position.y = Math.sin(time * 2) * 0.08 - 0.5;
+            }
             starMaterial.opacity = 0.5 + Math.sin(time * 3) * 0.3;
             starField.rotation.y += 0.0003;
             for (let i = fallingBills.length - 1; i >= 0; i--) {
@@ -238,8 +262,7 @@
         }
 
         window.addEventListener('resize', () => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
+            const w = window.innerWidth; const h = window.innerHeight;
             camera.aspect = w / h;
             camera.fov = w < h ? 60 : 45; 
             camera.updateProjectionMatrix();
