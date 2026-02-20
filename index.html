@@ -1,22 +1,56 @@
-@ -3,7 +3,7 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Red Packet - Mobile Optimized</title>
     <title>3D Red Packet - Music & Responsive</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=WDXL+Lubrifont+SC&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
-@ -28,7 +28,7 @@
+    
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
+        canvas { display: block; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+        #ui-hint {
+            position: absolute; bottom: 30px; width: 100%; text-align: center;
+            color: white; font-family: 'ZCOOL QingKe HuangYou', sans-serif;
+            pointer-events: none; text-shadow: 0 0 10px rgba(255,255,255,0.8); 
+            font-size: 1rem;
+            z-index: 10;
+            letter-spacing: 1px;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+        @media (min-width: 768px) {
+            #ui-hint { font-size: 1.2rem; letter-spacing: 2px; }
+        }
     </style>
 </head>
 <body>
-    <div id="ui-hint">Swipe to rotate • Tap photo to zoom</div>
     <div id="ui-hint">Tap to Start • Swipe to rotate</div>
 
     <script type="importmap">
         {
-@ -54,6 +54,27 @@
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "gsap": "https://cdn.skypack.dev/gsap"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { gsap } from 'gsap';
+
+        const scene = new THREE.Scene();
+        const initialFOV = window.innerWidth < window.innerHeight ? 60 : 45;
+        const camera = new THREE.PerspectiveCamera(initialFOV, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 7;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         document.body.appendChild(renderer.domElement);
 
@@ -44,48 +78,69 @@
         const loader = new THREE.TextureLoader();
         const raycaster = new THREE.Raycaster();
         const mouse = new THREE.Vector2();
-@ -71,11 +92,7 @@
+        
+        const bgTex = loader.load('https://image2url.com/r2/default/images/1771541127367-cf4d5632-6ecc-45d9-b9ce-18b8c4a5fb31.jpg');
+        const moneyTex = loader.load('https://image2url.com/r2/default/images/1771541178718-280babeb-6e20-4976-9f39-976cabe8c8f1.png');
+        bgTex.colorSpace = THREE.SRGBColorSpace;
+        scene.background = bgTex;
+
+        const starCount = 800;
+        const starGeometry = new THREE.BufferGeometry();
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i++) {
+            starPositions[i] = (Math.random() - 0.5) * 25;
         }
         starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
         const starMaterial = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 0.06,
-            transparent: true,
-            opacity: 0.8,
-            blending: THREE.AdditiveBlending
             color: 0xffffff, size: 0.06, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending
         });
         const starField = new THREE.Points(starGeometry, starMaterial);
         starField.position.z = -2;
-@ -101,20 +118,18 @@
+        scene.add(starField);
+
+        const packetGroup = new THREE.Group();
+        const height = 3.0; 
+        const width = height * (16/9);
+
+        const createSide = (url, isBack = false) => {
+            const tex = loader.load(url);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+            if(isBack) mesh.rotation.y = Math.PI; 
+            return mesh;
+        };
+
+        const frontSide = createSide('https://image2url.com/r2/default/images/1771538937670-e9ed0ee8-f94b-41b6-ad93-5992c14d2219.png');
+        const backSide = createSide('https://image2url.com/r2/default/images/1771538590326-4112549e-d3bb-4920-adb4-2c17d9478b53.png', true);
+        backSide.position.z = -0.01;
+
+        const sideImgTex = loader.load('https://image2url.com/r2/default/images/1771543295400-4804656f-6037-4a61-b70b-b3a999b25e8c.jpg');
         sideImgTex.colorSpace = THREE.SRGBColorSpace;
         const sideImgMat = new THREE.MeshBasicMaterial({ map: sideImgTex, transparent: true, opacity: 0 });
         const sideImgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), sideImgMat); 
-        
-        // --- UPDATED LOCATION: POSITIONED BELOW ---
         sideImgMesh.position.set(0, -height * 0.8, -0.2); 
         sideImgMesh.rotation.y = Math.PI; 
         sideImgMesh.name = "targetPhoto"; 
         sideImgMesh.renderOrder = 2;
 
-        function createTextTexture(text) {
         function createTextTexture(text, fontSize = 90, shadowBlur = 30) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 1024; canvas.height = 256;
-            ctx.shadowColor = '#FF1493'; ctx.shadowBlur = 30;
             ctx.shadowColor = '#FF1493'; ctx.shadowBlur = shadowBlur;
             ctx.fillStyle = '#ffffff'; 
-            ctx.font = 'bold 90px "ZCOOL QingKe HuangYou"';
             ctx.font = `bold ${fontSize}px "ZCOOL QingKe HuangYou"`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(text, canvas.width / 2, canvas.height / 2);
             const texture = new THREE.CanvasTexture(canvas);
-@ -126,7 +141,15 @@
+            texture.colorSpace = THREE.SRGBColorSpace;
+            return texture;
+        }
+
+        const textMesh = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.9, 0.6), new THREE.MeshBasicMaterial({ map: createTextTexture("骏马奔腾，蝠星高照"), transparent: true }));
         textMesh.position.set(0, 0, -0.15); 
         textMesh.rotation.y = Math.PI;
 
-        packetGroup.add(frontSide, backSide, textMesh, sideImgMesh);
         const englishText = "Galloping horses, with fortune shining high below";
         const englishTextMesh = new THREE.Mesh(
             new THREE.PlaneGeometry(width * 0.8, 0.4),
@@ -98,23 +153,43 @@
         scene.add(packetGroup);
 
         const fallingBills = [];
-@ -139,7 +162,6 @@
+        let hasFlipped = false;
+        function spawnMoney() {
+            const count = window.innerWidth < 768 ? 5 : 8; 
+            for (let i = 0; i < count; i++) {
+                const bill = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.8, 0.4),
                     new THREE.MeshBasicMaterial({ map: moneyTex, transparent: true, side: THREE.DoubleSide })
                 );
                 bill.position.set((Math.random() - 0.5) * 8, 6, Math.random() * 2);
-                bill.renderOrder = 1;
                 scene.add(bill);
                 fallingBills.push({ mesh: bill, speed: 0.04 + Math.random() * 0.05, rot: (Math.random() - 0.5) * 0.1 });
             }
-@ -161,7 +183,6 @@
+        }
+
+        let isZoomed = false;
+        let sideImageVisible = false;
+
+        const zoomIn = () => {
+            isZoomed = true;
+            sideImgMesh.renderOrder = 9999; 
+            sideImgMat.depthTest = false;
+            const zoomZ = window.innerWidth < 768 ? 6.0 : 5.5;
+            gsap.to(sideImgMesh.position, { x: 0, y: 0, z: zoomZ, duration: 1.0, ease: "expo.out" });
+            gsap.to(sideImgMesh.scale, { x: 3.5, y: 3.5, duration: 1.0, ease: "expo.out" });
+            gsap.to(packetGroup.position, { z: -5, duration: 1.0 }); 
+        };
+
         const zoomOut = () => {
             isZoomed = false;
             gsap.to(sideImgMesh.position, { 
-                // --- UPDATED LOCATION: RETURN TO BELOW POSITION ---
                 x: 0, y: -height * 0.8, z: -0.2, duration: 0.8, ease: "power2.inOut", 
                 onComplete: () => { sideImgMesh.renderOrder = 2; sideImgMat.depthTest = true; }
             });
-@ -172,6 +193,7 @@
+            gsap.to(sideImgMesh.scale, { x: 1, y: 1, duration: 0.8 });
+            gsap.to(packetGroup.position, { z: 0, duration: 0.8 });
+        };
+
         let isDragging = false, prevX = 0;
 
         const startInteraction = (clientX) => {
@@ -122,16 +197,25 @@
             isDragging = false;
             prevX = clientX;
         };
-@ -186,8 +208,6 @@
+
+        const moveInteraction = (clientX, isDown) => {
+            if (isDown) {
+                isDragging = true;
+                if(!isZoomed) packetGroup.rotation.y += (clientX - prevX) * 0.01;
+                prevX = clientX;
+                const rot = Math.abs(packetGroup.rotation.y % (Math.PI * 2));
+                const isShowingBack = rot > Math.PI * 0.5 && rot < Math.PI * 1.5;
                 if (isShowingBack !== sideImageVisible && !isZoomed) {
                     sideImageVisible = isShowingBack;
                     gsap.to(sideImgMat, { opacity: isShowingBack ? 1 : 0, duration: 0.5 });
-                    
-                    // --- UPDATED INTERACTION: FADE IN BELOW RATHER THAN TO THE RIGHT ---
                     gsap.to(sideImgMesh.position, { y: isShowingBack ? -height * 0.85 : -height * 0.6, duration: 0.8 });
                 }
                 if (isShowingBack && !hasFlipped) {
-@ -199,6 +219,7 @@
+                    spawnMoney();
+                    hasFlipped = true;
+                    setTimeout(() => { hasFlipped = false; }, 3000);
+                }
+            }
         };
 
         const handleSelect = (clientX, clientY) => {
@@ -139,11 +223,25 @@
             if (isDragging) return;
             if (isZoomed) { zoomOut(); return; }
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
-@ -221,7 +242,10 @@
+            mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(sideImgMesh);
+            if (intersects.length > 0 && sideImageVisible) zoomIn();
+        };
+
+        window.addEventListener('mousedown', (e) => startInteraction(e.clientX));
+        window.addEventListener('mousemove', (e) => moveInteraction(e.clientX, e.buttons === 1));
+        window.addEventListener('click', (e) => handleSelect(e.clientX, e.clientY));
+
+        window.addEventListener('touchstart', (e) => startInteraction(e.touches[0].clientX), {passive: false});
+        window.addEventListener('touchmove', (e) => moveInteraction(e.touches[0].clientX, true), {passive: false});
+        window.addEventListener('touchend', (e) => {
+            handleSelect(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+        });
+
         function animate() {
             requestAnimationFrame(animate);
             const time = Date.now() * 0.001;
-            if(!isZoomed) textMesh.position.y = Math.sin(time * 2) * 0.08;
             if(!isZoomed) {
                 textMesh.position.y = Math.sin(time * 2) * 0.08;
                 englishTextMesh.position.y = Math.sin(time * 2) * 0.08 - 0.5;
@@ -151,13 +249,27 @@
             starMaterial.opacity = 0.5 + Math.sin(time * 3) * 0.3;
             starField.rotation.y += 0.0003;
             for (let i = fallingBills.length - 1; i >= 0; i--) {
-@ -238,8 +262,7 @@
+                const b = fallingBills[i];
+                b.mesh.position.y -= b.speed;
+                b.mesh.rotation.z += b.rot;
+                b.mesh.rotation.x += b.rot;
+                if (b.mesh.position.y < -6) {
+                    scene.remove(b.mesh);
+                    fallingBills.splice(i, 1);
+                }
+            }
+            renderer.render(scene, camera);
         }
 
         window.addEventListener('resize', () => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
             const w = window.innerWidth; const h = window.innerHeight;
             camera.aspect = w / h;
             camera.fov = w < h ? 60 : 45; 
             camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        document.fonts.ready.then(() => animate());
+    </script>
+</body>
+</html>
