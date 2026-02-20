@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Red Packet - Music & Responsive</title>
+    <title>3D Red Packet - Music Controls</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=WDXL+Lubrifont+SC&family=ZCOOL+QingKe+HuangYou&display=swap" rel="stylesheet">
@@ -12,6 +12,41 @@
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
         canvas { display: block; cursor: grab; }
         canvas:active { cursor: grabbing; }
+
+        /* --- Music Button Styles --- */
+        #music-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            border: 2px solid #FF1493;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            font-size: 1.2rem;
+            box-shadow: 0 0 15px #FF1493;
+            transition: all 0.3s ease;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #music-btn.playing {
+            box-shadow: 0 0 25px #FF1493, inset 0 0 10px #FF1493;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
         #ui-hint {
             position: absolute; bottom: 30px; width: 100%; text-align: center;
             color: white; font-family: 'ZCOOL QingKe HuangYou', sans-serif;
@@ -28,7 +63,9 @@
     </style>
 </head>
 <body>
-    <div id="ui-hint">Tap to Start • Swipe to rotate</div>
+    <button id="music-btn" aria-label="Toggle Music">▶</button>
+
+    <div id="ui-hint">Tap music icon to start • Swipe to rotate</div>
 
     <script type="importmap">
         {
@@ -59,21 +96,30 @@
         camera.add(listener);
         const backgroundMusic = new THREE.Audio(listener);
         const audioLoader = new THREE.AudioLoader();
+        const musicBtn = document.getElementById('music-btn');
         
-        let musicStarted = false;
         audioLoader.load('https://image2url.com/r2/default/audio/1771552153075-29792ba3-1543-4ad7-9612-37da84f1d2ee.mp3', (buffer) => {
             backgroundMusic.setBuffer(buffer);
             backgroundMusic.setLoop(true);
             backgroundMusic.setVolume(0.5);
         });
 
-        const startMusic = () => {
-            if (!musicStarted && backgroundMusic.buffer) {
+        const toggleMusic = (e) => {
+            if (e) e.stopPropagation(); // Prevent 3D interaction when clicking button
+            
+            if (!backgroundMusic.isPlaying) {
                 backgroundMusic.play();
-                musicStarted = true;
+                musicBtn.innerHTML = '⏸';
+                musicBtn.classList.add('playing');
                 document.getElementById('ui-hint').innerText = "Swipe to rotate • Tap photo to zoom";
+            } else {
+                backgroundMusic.pause();
+                musicBtn.innerHTML = '▶';
+                musicBtn.classList.remove('playing');
             }
         };
+
+        musicBtn.addEventListener('click', toggleMusic);
 
         const loader = new THREE.TextureLoader();
         const raycaster = new THREE.Raycaster();
@@ -193,7 +239,6 @@
         let isDragging = false, prevX = 0;
 
         const startInteraction = (clientX) => {
-            startMusic(); // Play music on first interaction
             isDragging = false;
             prevX = clientX;
         };
@@ -219,7 +264,6 @@
         };
 
         const handleSelect = (clientX, clientY) => {
-            startMusic();
             if (isDragging) return;
             if (isZoomed) { zoomOut(); return; }
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
