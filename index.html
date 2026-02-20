@@ -12,22 +12,42 @@
         body { margin: 0; overflow: hidden; background: #000; touch-action: none; }
         canvas { display: block; cursor: grab; }
         canvas:active { cursor: grabbing; }
+        
         #ui-hint {
             position: absolute; bottom: 30px; width: 100%; text-align: center;
             color: white; font-family: 'ZCOOL QingKe HuangYou', sans-serif;
             pointer-events: none; text-shadow: 0 0 10px rgba(255,255,255,0.8); 
-            font-size: 1rem;
-            z-index: 10;
-            letter-spacing: 1px;
-            padding: 0 10px;
-            box-sizing: border-box;
+            font-size: 1rem; z-index: 10; letter-spacing: 1px; padding: 0 10px; box-sizing: border-box;
         }
+
+        /* --- Music Controls Styles --- */
+        #music-controls {
+            position: absolute; top: 20px; right: 20px;
+            display: flex; gap: 15px; z-index: 100;
+        }
+        .music-btn {
+            width: 45px; height: 45px; border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5); border: 2px solid #FF1493;
+            color: white; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 0 15px #FF1493; transition: all 0.3s;
+            font-size: 1.2rem; outline: none;
+        }
+        .music-btn:hover { transform: scale(1.1); box-shadow: 0 0 25px #FF1493; }
+        .music-btn:active { transform: scale(0.95); }
+        .hidden { display: none; }
+
         @media (min-width: 768px) {
             #ui-hint { font-size: 1.2rem; letter-spacing: 2px; }
+            .music-btn { width: 50px; height: 50px; }
         }
     </style>
 </head>
 <body>
+    <div id="music-controls">
+        <button id="play-btn" class="music-btn">▶</button>
+        <button id="pause-btn" class="music-btn hidden">Ⅱ</button>
+    </div>
+
     <div id="ui-hint">Tap to Start • Swipe to rotate</div>
 
     <script type="importmap">
@@ -54,26 +74,36 @@
         renderer.outputColorSpace = THREE.SRGBColorSpace;
         document.body.appendChild(renderer.domElement);
 
-        // --- AUDIO SETUP ---
+        // --- AUDIO LOGIC ---
         const listener = new THREE.AudioListener();
         camera.add(listener);
-        const backgroundMusic = new THREE.Audio(listener);
+        const sound = new THREE.Audio(listener);
         const audioLoader = new THREE.AudioLoader();
         
-        let musicStarted = false;
+        const playBtn = document.getElementById('play-btn');
+        const pauseBtn = document.getElementById('pause-btn');
+
         audioLoader.load('https://image2url.com/r2/default/audio/1771552153075-29792ba3-1543-4ad7-9612-37da84f1d2ee.mp3', (buffer) => {
-            backgroundMusic.setBuffer(buffer);
-            backgroundMusic.setLoop(true);
-            backgroundMusic.setVolume(0.5);
+            sound.setBuffer(buffer);
+            sound.setLoop(true);
+            sound.setVolume(0.5);
         });
 
-        const startMusic = () => {
-            if (!musicStarted && backgroundMusic.buffer) {
-                backgroundMusic.play();
-                musicStarted = true;
+        function togglePlay(play) {
+            if (play && !sound.isPlaying) {
+                sound.play();
+                playBtn.classList.add('hidden');
+                pauseBtn.classList.remove('hidden');
                 document.getElementById('ui-hint').innerText = "Swipe to rotate • Tap photo to zoom";
+            } else if (!play && sound.isPlaying) {
+                sound.pause();
+                pauseBtn.classList.add('hidden');
+                playBtn.classList.remove('hidden');
             }
-        };
+        }
+
+        playBtn.addEventListener('click', () => togglePlay(true));
+        pauseBtn.addEventListener('click', () => togglePlay(false));
 
         const loader = new THREE.TextureLoader();
         const raycaster = new THREE.Raycaster();
@@ -123,13 +153,13 @@
         sideImgMesh.name = "targetPhoto"; 
         sideImgMesh.renderOrder = 2;
 
-        function createTextTexture(text, fontSize = 90, shadowBlur = 30) {
+        function createTextTexture(text) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = 1024; canvas.height = 256;
-            ctx.shadowColor = '#FF1493'; ctx.shadowBlur = shadowBlur;
+            ctx.shadowColor = '#FF1493'; ctx.shadowBlur = 30;
             ctx.fillStyle = '#ffffff'; 
-            ctx.font = `bold ${fontSize}px "ZCOOL QingKe HuangYou"`;
+            ctx.font = 'bold 90px "ZCOOL QingKe HuangYou"';
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(text, canvas.width / 2, canvas.height / 2);
             const texture = new THREE.CanvasTexture(canvas);
@@ -141,15 +171,7 @@
         textMesh.position.set(0, 0, -0.15); 
         textMesh.rotation.y = Math.PI;
 
-        const englishText = "Galloping horses, with fortune shining high below";
-        const englishTextMesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(width * 0.8, 0.4),
-            new THREE.MeshBasicMaterial({ map: createTextTexture(englishText, 45, 15), transparent: true })
-        );
-        englishTextMesh.position.set(0, -0.5, -0.16); 
-        englishTextMesh.rotation.y = Math.PI;
-
-        packetGroup.add(frontSide, backSide, textMesh, englishTextMesh, sideImgMesh);
+        packetGroup.add(frontSide, backSide, textMesh, sideImgMesh);
         scene.add(packetGroup);
 
         const fallingBills = [];
@@ -162,6 +184,7 @@
                     new THREE.MeshBasicMaterial({ map: moneyTex, transparent: true, side: THREE.DoubleSide })
                 );
                 bill.position.set((Math.random() - 0.5) * 8, 6, Math.random() * 2);
+                bill.renderOrder = 1;
                 scene.add(bill);
                 fallingBills.push({ mesh: bill, speed: 0.04 + Math.random() * 0.05, rot: (Math.random() - 0.5) * 0.1 });
             }
@@ -193,7 +216,8 @@
         let isDragging = false, prevX = 0;
 
         const startInteraction = (clientX) => {
-            startMusic(); // Play music on first interaction
+            // Auto-play on first touch/click if not already playing
+            if (!sound.isPlaying && sound.buffer) togglePlay(true);
             isDragging = false;
             prevX = clientX;
         };
@@ -219,7 +243,6 @@
         };
 
         const handleSelect = (clientX, clientY) => {
-            startMusic();
             if (isDragging) return;
             if (isZoomed) { zoomOut(); return; }
             mouse.x = (clientX / window.innerWidth) * 2 - 1;
@@ -232,20 +255,14 @@
         window.addEventListener('mousedown', (e) => startInteraction(e.clientX));
         window.addEventListener('mousemove', (e) => moveInteraction(e.clientX, e.buttons === 1));
         window.addEventListener('click', (e) => handleSelect(e.clientX, e.clientY));
-
         window.addEventListener('touchstart', (e) => startInteraction(e.touches[0].clientX), {passive: false});
         window.addEventListener('touchmove', (e) => moveInteraction(e.touches[0].clientX, true), {passive: false});
-        window.addEventListener('touchend', (e) => {
-            handleSelect(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-        });
+        window.addEventListener('touchend', (e) => handleSelect(e.changedTouches[0].clientX, e.changedTouches[0].clientY));
 
         function animate() {
             requestAnimationFrame(animate);
             const time = Date.now() * 0.001;
-            if(!isZoomed) {
-                textMesh.position.y = Math.sin(time * 2) * 0.08;
-                englishTextMesh.position.y = Math.sin(time * 2) * 0.08 - 0.5;
-            }
+            if(!isZoomed) textMesh.position.y = Math.sin(time * 2) * 0.08;
             starMaterial.opacity = 0.5 + Math.sin(time * 3) * 0.3;
             starField.rotation.y += 0.0003;
             for (let i = fallingBills.length - 1; i >= 0; i--) {
