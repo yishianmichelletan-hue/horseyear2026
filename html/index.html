@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Original Color Red Packet - WDXL Font</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Funnel+Display:wght@300..800&family=WDXL+Lubrifont+SC&display=swap" rel="stylesheet">
+    
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { display: block; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+    </style>
+</head>
+<body>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "gsap": "https://cdn.skypack.dev/gsap"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { gsap } from 'gsap';
+
+        // --- Core Setup ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 7; // Pulled back slightly for extra elements
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        document.body.appendChild(renderer.domElement);
+
+        const loader = new THREE.TextureLoader();
+        
+        // Background
+        const bgTex = loader.load('https://image2url.com/r2/default/images/1771541127367-cf4d5632-6ecc-45d9-b9ce-18b8c4a5fb31.jpg');
+        bgTex.colorSpace = THREE.SRGBColorSpace;
+        scene.background = bgTex;
+
+        // Assets
+        const moneyTex = loader.load('https://image2url.com/r2/default/images/1771541178718-280babeb-6e20-4976-9f39-976cabe8c8f1.png');
+        const sideImgTex = loader.load('https://image2url.com/r2/default/images/1771543295400-4804656f-6037-4a61-b70b-b3a999b25e8c.jpg');
+        sideImgTex.colorSpace = THREE.SRGBColorSpace;
+
+        // --- Packet Construction ---
+        const packetGroup = new THREE.Group();
+        const height = 3.0; 
+        const width = height * (16/9);
+
+        const createSide = (url, isBack = false) => {
+            const tex = loader.load(url);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
+            if(isBack) mesh.rotation.y = Math.PI; 
+            return mesh;
+        };
+
+        const frontSide = createSide('https://image2url.com/r2/default/images/1771538937670-e9ed0ee8-f94b-41b6-ad93-5992c14d2219.png');
+        const backSide = createSide('https://image2url.com/r2/default/images/1771538590326-4112549e-d3bb-4920-adb4-2c17d9478b53.png', true);
+        backSide.position.z = -0.01;
+
+        // --- Side Image (Hidden initially) ---
+        const sideImgMat = new THREE.MeshBasicMaterial({ map: sideImgTex, transparent: true, opacity: 0 });
+        const sideImgMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 2.5), sideImgMat); 
+        sideImgMesh.position.set(width * 0.7, 0, -0.2); // Start closer for the slide-in effect
+        sideImgMesh.rotation.y = Math.PI; 
+
+        // --- Create Glowing Floating Text (Using WDXL Lubrifont SC) ---
+        function createTextTexture(text) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 1024;
+            canvas.height = 256;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Red Glow Effect
+            ctx.shadowColor = '#ff0000';
+            ctx.shadowBlur = 35;
+            ctx.fillStyle = '#ffffff'; 
+            // Use the Google Font family name
+            ctx.font = 'bold 80px "WDXL Lubrifont SC"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            return texture;
+        }
+
+        const textTex = createTextTexture("骏马奔腾，蝠星高照");
+        const textMat = new THREE.MeshBasicMaterial({ map: textTex, transparent: true });
+        const textMesh = new THREE.Mesh(new THREE.PlaneGeometry(width * 0.9, 0.6), textMat);
+        textMesh.position.set(0, 0, -0.15); 
+        textMesh.rotation.y = Math.PI;
+
+        packetGroup.add(frontSide, backSide, textMesh, sideImgMesh);
+        scene.add(packetGroup);
+
+        // --- Falling Money Logic ---
+        const fallingBills = [];
+        let hasFlipped = false;
+        function spawnMoney() {
+            for (let i = 0; i < 5; i++) {
+                const bill = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.8, 0.4),
+                    new THREE.MeshBasicMaterial({ map: moneyTex, transparent: true, side: THREE.DoubleSide })
+                );
+                bill.position.set((Math.random() - 0.5) * 8, 5, Math.random() * 2);
+                scene.add(bill);
+                fallingBills.push({ mesh: bill, speed: 0.03 + Math.random() * 0.04, rot: (Math.random() - 0.5) * 0.05 });
+            }
+        }
+
+        // --- Ease-In Side Image Logic ---
+        let sideImageVisible = false;
+        const toggleSideImage = (show) => {
+            if (show === sideImageVisible) return;
+            sideImageVisible = show;
+            gsap.to(sideImgMat, { opacity: show ? 1 : 0, duration: 1.2, ease: "power2.inOut" });
+            gsap.to(sideImgMesh.position, { x: show ? width * 0.95 : width * 0.7, duration: 1.2, ease: "power2.out" });
+        };
+
+        // --- Stars ---
+        const stars = new THREE.Points(
+            new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(300).map(() => (Math.random() - 0.5) * 15), 3)),
+            new THREE.PointsMaterial({ color: 0xffffff, size: 0.02, transparent: true, opacity: 0.6 })
+        );
+        scene.add(stars);
+
+        // --- Interaction ---
+        let isDragging = false, prevX = 0;
+        window.addEventListener('mousedown', (e) => { isDragging = true; prevX = e.clientX; });
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const delta = (e.clientX - prevX) * 0.01;
+                packetGroup.rotation.y += delta;
+                prevX = e.clientX;
+
+                // Flip trigger logic
+                const rot = Math.abs(packetGroup.rotation.y % (Math.PI * 2));
+                const isShowingBack = rot > Math.PI * 0.5 && rot < Math.PI * 1.5;
+                
+                toggleSideImage(isShowingBack);
+
+                if (isShowingBack && !hasFlipped) {
+                    spawnMoney();
+                    hasFlipped = true;
+                    setTimeout(() => { hasFlipped = false; }, 2000);
+                }
+            }
+        });
+        window.addEventListener('mouseup', () => isDragging = false);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Text floating animation
+            textMesh.position.y = Math.sin(Date.now() * 0.002) * 0.08;
+            
+            // Money physics
+            fallingBills.forEach((b, i) => {
+                b.mesh.position.y -= b.speed;
+                b.mesh.rotation.z += b.rot;
+                if (b.mesh.position.y < -5) {
+                    scene.remove(b.mesh);
+                    fallingBills.splice(i, 1);
+                }
+            });
+
+            stars.rotation.y += 0.0005;
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Ensure font is loaded before starting
+        document.fonts.ready.then(() => {
+            animate();
+        });
+    </script>
+</body>
+</html>
